@@ -21,7 +21,7 @@ jobs:
         run: npm install
 
       - name: Run sync script
-        run: npm run sync
+        run: npm run dev
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
