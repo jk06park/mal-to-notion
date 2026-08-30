@@ -4,37 +4,51 @@ const notion = new Client({ auth: process.env.NOTION_TOKEN });
 const username = process.env.MAL_USERNAME;
 
 async function run() {
-  console.log('Buscando bases de datos en Notion...');
+  console.log('Buscando la galería principal de Watchlist...');
   
   const searchRes = await notion.search({
     filter: { value: 'database', property: 'object' }
   });
 
   if (!searchRes.results || searchRes.results.length === 0) {
-    console.error('No se encontró ninguna base de datos compartida.');
+    console.error('No se encontró ninguna base de datos.');
     return;
   }
 
-  // Filtrar la base de datos de animes (excluyendo géneros)
-  const targetDb = searchRes.results.find(db => {
+  // Filtrar descartando explícitamente "Quotes", "Citas" y "Genres"
+  let targetDb = searchRes.results.find(db => {
     const title = (db.title?.[0]?.plain_text || '').toLowerCase();
-    const isGenre = title.includes('genre') || title.includes('género') || title.includes('genres');
-    return !isGenre;
-  }) || searchRes.results[0];
+    const isQuote = title.includes('quote') || title.includes('cita');
+    const isGenre = title.includes('genre') || title.includes('género');
+    return !isQuote && !isGenre;
+  });
+
+  // Si no la descarta por título, busca la que tenga la propiedad de portada o estado
+  if (!targetDb) {
+    targetDb = searchRes.results.find(db => {
+      const propKeys = Object.keys(db.properties).map(k => k.toLowerCase());
+      return propKeys.includes('status') || propKeys.includes('score') || propKeys.includes('rating');
+    });
+  }
+
+  if (!targetDb) {
+    targetDb = searchRes.results[searchRes.results.length - 1];
+  }
 
   const targetDbId = targetDb.id;
-  console.log(`Guardando en: "${targetDb.title?.[0]?.plain_text || 'Watchlist'}" (${targetDbId})`);
+  const dbName = targetDb.title?.[0]?.plain_text || 'Watchlist';
+  console.log(`Base de datos objetivo elegida: "${dbName}" (${targetDbId})`);
 
-  console.log(`Obteniendo lista de MyAnimeList para: ${username}...`);
+  console.log(`Obteniendo lista de MAL para: ${username}...`);
   const response = await fetch(`https://myanimelist.net/animelist/${username}/load.json?status=7`);
   const data = await response.json();
 
   if (!Array.isArray(data) || data.length === 0) {
-    console.log('No se encontraron animes en la lista.');
+    console.log('No se encontraron animes.');
     return;
   }
 
-  console.log(`Sincronizando ${data.length} animes...`);
+  console.log(`Cargando ${data.length} animes en "${dbName}"...`);
 
   const titleKey = Object.keys(targetDb.properties).find(k => targetDb.properties[k].type === 'title') || 'Name';
 
@@ -60,13 +74,13 @@ async function run() {
 
     try {
       await notion.pages.create(pagePayload);
-      console.log(`Añadido: ${title}`);
+      console.log(`Añadido a Watchlist: ${title}`);
       await new Promise(r => setTimeout(r, 350));
     } catch (e) {
       console.error(`Error en "${title}":`, e.message);
     }
   }
-  console.log('¡Sincronización completada con éxito!');
+  console.log('¡Sincronización en la galería central completada!');
 }
 
 run();
